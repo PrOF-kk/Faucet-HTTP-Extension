@@ -803,7 +803,9 @@ with (client)
             return __http_client_destroy();
         }
     
-        var bytesRead, c;
+        var bytesRead, c, linebuf, line;
+        linebuf = "";
+        line = 0;
         for (bytesRead = 1; bytesRead <= available; bytesRead += 1)
         {
             c = fct_read_string(socket, 1);
