@@ -592,7 +592,7 @@ with (client)
     CR = chr(13);
     LF = chr(10);
     CRLF = CR + LF;
-    socket = tcp_connect(ds_map_find_value(parsed, 'host'), ds_map_find_value(parsed, 'port'));
+    socket = fct_tcp_connect(ds_map_find_value(parsed, 'host'), ds_map_find_value(parsed, 'port'));
     state = 0;
     errored = false;
     error = '';
@@ -600,7 +600,7 @@ with (client)
     line = 0;
     statusCode = -1;
     reasonPhrase = '';
-    responseBody = buffer_create();
+    responseBody = fct_buffer_create();
     responseBodySize = -1;
     responseBodyProgress = -1;
     responseHeaders = ds_map_create();
@@ -622,34 +622,34 @@ with (client)
     // elements are separated by SP characters. No CR or LF is allowed
     // except in the final CRLF sequence."
     if (ds_map_exists(parsed, 'query'))
-        write_string(socket, requestMethod + ' ' + ds_map_find_value(parsed, 'abs_path') + '?' + ds_map_find_value(parsed, 'query') + ' HTTP/1.1' + CRLF);
+        fct_write_string(socket, requestMethod + ' ' + ds_map_find_value(parsed, 'abs_path') + '?' + ds_map_find_value(parsed, 'query') + ' HTTP/1.1' + CRLF);
     else
-        write_string(socket, requestMethod + ' ' + ds_map_find_value(parsed, 'abs_path') + ' HTTP/1.1' + CRLF);
+        fct_write_string(socket, requestMethod + ' ' + ds_map_find_value(parsed, 'abs_path') + ' HTTP/1.1' + CRLF);
 
     // "A client MUST include a Host header field in all HTTP/1.1 request
     // messages."
     // "A "host" without any trailing port information implies the default
     // port for the service requested (e.g., "80" for an HTTP URL)."
     if (ds_map_find_value(parsed, 'port') == 80)
-        write_string(socket, 'Host: ' + ds_map_find_value(parsed, 'host') + CRLF);
+        fct_write_string(socket, 'Host: ' + ds_map_find_value(parsed, 'host') + CRLF);
     else
-        write_string(socket, 'Host: ' + ds_map_find_value(parsed, 'host')
+        fct_write_string(socket, 'Host: ' + ds_map_find_value(parsed, 'host')
             + ':' + string(ds_map_find_value(parsed, 'port')) + CRLF);
 
     // "An HTTP/1.1 server MAY assume that a HTTP/1.1 client intends to
     // maintain a persistent connection unless a Connection header including
     // the connection-token "close" was sent in the request."
-    write_string(socket, 'Connection: close' + CRLF);
+    fct_write_string(socket, 'Connection: close' + CRLF);
 
     // "If no Accept-Encoding field is present in a request, the server MAY
     // assume that the client will accept any content coding."
-    write_string(socket, 'Accept-Encoding:' + CRLF);
+    fct_write_string(socket, 'Accept-Encoding:' + CRLF);
 
     // Request body meta data
     if (requestBody)
     {
-        write_string(socket, 'Content-Length: ' + string(buffer_size(requestBody)) + CRLF);
-        write_string(socket, 'Content-Type: ' + requestBodyMimeType + CRLF);
+        fct_write_string(socket, 'Content-Length: ' + string(fct_buffer_size(requestBody)) + CRLF);
+        fct_write_string(socket, 'Content-Type: ' + requestBodyMimeType + CRLF);
     }
         
     // If headers specified
@@ -659,18 +659,18 @@ with (client)
         // Iterate over headers map
         for (key = ds_map_find_first(headers); is_string(key); key = ds_map_find_next(headers, key))
         {
-            write_string(socket, key + ': ' + ds_map_find_value(headers, key) + CRLF);
+            fct_write_string(socket, key + ': ' + ds_map_find_value(headers, key) + CRLF);
         }
     }
     
     // Send extra CRLF to terminate request
-    write_string(socket, CRLF);
+    fct_write_string(socket, CRLF);
     
     // Request body itself
     if (requestBody)
-        write_buffer(socket, requestBody);
+        fct_write_buffer(socket, requestBody);
     
-    socket_send(socket);
+    fct_socket_send(socket);
 
     ds_map_destroy(parsed);
 }
@@ -782,21 +782,21 @@ with (client)
         exit;
     
     // Socket error
-    if (socket_has_error(socket))
+    if (fct_socket_has_error(socket))
     {
         errored = true;
-        error = "Socket error: " + socket_error(socket);
+        error = "Socket error: " + fct_socket_error(socket);
         return __http_client_destroy();
     }
     
     var available;
-    available = tcp_receive_available(socket);
+    available = fct_tcp_receive_available(socket);
     
     switch (state)
     {
     // Receiving lines
     case 0:
-        if (!available && tcp_eof(socket))
+        if (!available && fct_tcp_eof(socket))
         {
             errored = true;
             error = "Unexpected EOF when receiving headers/status code";
@@ -806,7 +806,7 @@ with (client)
         var bytesRead, c;
         for (bytesRead = 1; bytesRead <= available; bytesRead += 1)
         {
-            c = read_string(socket, 1);
+            c = fct_read_string(socket, 1);
             // Reached end of line
             // "HTTP/1.1 defines the sequence CR LF as the end-of-line marker for all
             // protocol elements except the entity-body (see appendix 19.3 for
@@ -851,7 +851,7 @@ with (client)
                     {
                         state = 1;
                         // write remainder
-                        write_buffer_part(responseBody, socket, available - bytesRead);
+                        fct_write_buffer_part(responseBody, socket, available - bytesRead);
                         responseBodyProgress = available - bytesRead;
                         break;
                     }
@@ -872,9 +872,9 @@ with (client)
         break;
     // Receiving response body
     case 1:
-        write_buffer(responseBody, socket);
+        fct_write_buffer(responseBody, socket);
         responseBodyProgress += available;
-        if (tcp_eof(socket))
+        if (fct_tcp_eof(socket))
         {
             if (ds_map_exists(responseHeaders, 'transfer-encoding'))
             {
@@ -882,22 +882,22 @@ with (client)
                 {
                     // Chunked transfer, let's decode it
                     var actualResponseBody, actualResponseSize;
-                    actualResponseBody = buffer_create();
+                    actualResponseBody = fct_buffer_create();
                     actualResponseBodySize = 0;
 
                     // Parse chunks
                     // chunk          = chunk-size [ chunk-extension ] CRLF
                     //                  chunk-data CRLF
                     // chunk-size     = 1*HEX
-                    while (buffer_bytes_left(responseBody))
+                    while (fct_buffer_bytes_left(responseBody))
                     {
                         var chunkSize, c;
                         chunkSize = '';
                         
                         // Read chunk size byte by byte 
-                        while (buffer_bytes_left(responseBody))
+                        while (fct_buffer_bytes_left(responseBody))
                         {
-                            c = read_string(responseBody, 1);
+                            c = fct_read_string(responseBody, 1);
                             if (c == CR or c == ';')
                                 break;
                             else
@@ -908,21 +908,21 @@ with (client)
                         if (c == ';')
                         {
                             // skip all extension stuff
-                            while (buffer_bytes_left(responseBody) && c != CR)
+                            while (fct_buffer_bytes_left(responseBody) && c != CR)
                             {
-                                c = read_string(responseBody, 1);
+                                c = fct_read_string(responseBody, 1);
                             }
                         }
                         // Reached end of header
                         if (c == CR)
                         {
-                            c += read_string(responseBody, 1);
+                            c += fct_read_string(responseBody, 1);
                             // Doesn't end in CRLF
                             if (c != CRLF)
                             {
                                 errored = true;
                                 error = 'header of chunk in chunked transfer did not end in CRLF';
-                                buffer_destroy(actualResponseBody);
+                                fct_buffer_destroy(actualResponseBody);
                                 return __http_client_destroy();
                             }
                             // chunk-size is empty - something's up!
@@ -930,7 +930,7 @@ with (client)
                             {
                                 errored = true;
                                 error = 'empty chunk-size in a chunked transfer';
-                                buffer_destroy(actualResponseBody);
+                                fct_buffer_destroy(actualResponseBody);
                                 return __http_client_destroy();
                             }
                             chunkSize = __http_parse_hex(chunkSize);
@@ -939,22 +939,22 @@ with (client)
                             {
                                 errored = true;
                                 error = 'chunk-size was not hexadecimal in a chunked transfer';
-                                buffer_destroy(actualResponseBody);
+                                fct_buffer_destroy(actualResponseBody);
                                 return __http_client_destroy();
                             }
                             // Is the chunk bigger than the remaining response?
-                            if (chunkSize + 2 > buffer_bytes_left(responseBody))
+                            if (chunkSize + 2 > fct_buffer_bytes_left(responseBody))
                             {
                                 errored = true;
                                 error = 'chunk-size was greater than remaining data in a chunked transfer';
-                                buffer_destroy(actualResponseBody);
+                                fct_buffer_destroy(actualResponseBody);
                                 return __http_client_destroy();
                             }
                             // OK, everything's good, read the chunk
-                            write_buffer_part(actualResponseBody, responseBody, chunkSize);
+                            fct_write_buffer_part(actualResponseBody, responseBody, chunkSize);
                             actualResponseBodySize += chunkSize;
                             // Check for CRLF
-                            if (read_string(responseBody, 2) != CRLF)
+                            if (fct_read_string(responseBody, 2) != CRLF)
                             {
                                 errored = true;
                                 error = 'chunk did not end in CRLF in a chunked transfer';
@@ -975,19 +975,19 @@ with (client)
                             // Parse header lines
                             var line;
                             line = 1;
-                            while (buffer_bytes_left(responseBody))
+                            while (fct_buffer_bytes_left(responseBody))
                             {
                                 var linebuf;
                                 linebuf = '';
-                                while (buffer_bytes_left(responseBody))
+                                while (fct_buffer_bytes_left(responseBody))
                                 {
-                                    c = read_string(responseBody, 1);
+                                    c = fct_read_string(responseBody, 1);
                                     if (c != CR)
                                         linebuf += c;
                                     else
                                         break;
                                 }
-                                c += read_string(responseBody, 1);
+                                c += fct_read_string(responseBody, 1);
                                 if (c != CRLF)
                                 {
                                     errored = true;
@@ -1001,7 +1001,7 @@ with (client)
                         }
                     }
                     responseBodySize = actualResponseBodySize;
-                    buffer_destroy(responseBody);
+                    fct_buffer_destroy(responseBody);
                     responseBody = actualResponseBody;
                 }
                 else
@@ -1083,8 +1083,8 @@ with (client)
 // Clears up contents of an httpClient prior to destruction or after error
 
 if (!destroyed) {
-    socket_destroy(socket);
-    buffer_destroy(responseBody);
+    fct_socket_destroy(socket);
+    fct_buffer_destroy(responseBody);
     ds_map_destroy(responseHeaders);
 }
 destroyed = true;
