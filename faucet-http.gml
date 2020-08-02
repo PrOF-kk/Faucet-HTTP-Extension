@@ -18,11 +18,11 @@
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 // ***
 
-// Creates global.__HttpClient
+// Initialises __HttpClient
 // real __http_init()
 
-global.__HttpClient = object_add();
-object_set_persistent(global.__HttpClient, true);
+global.HttpClientInitDone = true;
+object_set_persistent(__HttpClient, true);
 
 #define __http_split
 // ***
@@ -1122,10 +1122,10 @@ var url, client;
 
 url = argument0;
 
-if (!variable_global_exists('__HttpClient'))
+if (!variable_global_exists('HttpClientInitDone'))
     __http_init();
 
-client = instance_create(0, 0, global.__HttpClient);
+client = instance_create(0, 0, __HttpClient);
 __http_prepare_request(client, 'GET', url, -1, 0, '');
 return client;
 
@@ -1164,10 +1164,10 @@ var url, headers, client;
 url = argument0;
 headers = argument1;
 
-if (!variable_global_exists('__HttpClient'))
+if (!variable_global_exists('HttpClientInitDone'))
     __http_init();
 
-client = instance_create(0, 0, global.__HttpClient);
+client = instance_create(0, 0, __HttpClient);
 __http_prepare_request(client, 'GET', url, headers, 0, '');
 return client;
 
@@ -1208,10 +1208,10 @@ url = argument0;
 body = argument1;
 mimeType = argument2;
 
-if (!variable_global_exists('__HttpClient'))
+if (!variable_global_exists('HttpClientInitDone'))
     __http_init();
 
-client = instance_create(0, 0, global.__HttpClient);
+client = instance_create(0, 0, __HttpClient);
 __http_prepare_request(client, 'POST', url, -1, body, mimeType);
 return client;
 
@@ -1254,10 +1254,10 @@ body = argument1;
 mimeType = argument2;
 headers = argument3;
 
-if (!variable_global_exists('__HttpClient'))
+if (!variable_global_exists('HttpClientInitDone'))
     __http_init();
 
-client = instance_create(0, 0, global.__HttpClient);
+client = instance_create(0, 0, __HttpClient);
 __http_prepare_request(client, 'POST', url, headers, body, mimeType);
 return client;
 
